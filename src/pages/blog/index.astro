@@ -1,0 +1,95 @@
+---
+import BaseHead from '../../components/BaseHead.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import { SITE_TITLE, SITE_DESCRIPTION } from '../../consts';
+import { getCollection } from 'astro:content';
+import FormattedDate from '../../components/FormattedDate.astro';
+
+const posts = (await getCollection('blog')).sort(
+	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+// Initialize the missing variables
+const errorOccurred = false;
+const allArticles = posts.map(post => ({
+  url: `/blog/${post.id}/`,
+  ogTitle: post.data.title,
+  ogImage: post.data.heroImage || ''
+}));
+---
+
+<!doctype html>
+<html>
+  <body>
+    <h1>News Articles</h1>
+    {
+      // If an error occurred, display an error message
+      // Otherwise, display the list of articles
+      errorOccurred ? (
+        <p>Sorry, we're unable to fetch articles at the moment.</p>
+      ) : (
+        <ul>
+          {allArticles.map((article) => (
+            <li>
+              <article>
+                <a href={article.url}>
+                  <h2>{article?.ogTitle}</h2>
+                </a>
+                <img src={article?.ogImage} alt="" />
+              </article>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </body>
+</html>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+  }
+  
+  h1 {
+    text-align: center;
+  }
+  
+  ul {
+    list-style-type: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-gap: 20px;
+  }
+  
+  article {
+    background-color: #f4f4f4;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+  }
+  
+  article:hover {
+    transform: translateY(-5px);
+  }
+  
+  article a {
+    text-decoration: none;
+    color: #333;
+  }
+  
+  article h2 {
+    font-size: 18px;
+    margin-top: 0;
+  }
+  
+  article img {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-top: 10px;
+  }
+</style>

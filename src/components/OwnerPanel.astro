@@ -1,0 +1,306 @@
+<div id="ownerPanelModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>Owner Control Panel</h2>
+    <p class="owner-only">These functions are only available to the contract owner.</p>
+    
+    <div class="admin-section">
+      <h3>Chainlink Functions</h3>
+      <p>Manually trigger the Chainlink Functions request to process data.</p>
+      
+      <div class="info-box info">
+        <strong>Note:</strong> This function:
+        <ul>
+          <li>Calls the <code>sendRequest()</code> function from your contract</li>
+          <li>Executes JavaScript code in a Chainlink DON</li>
+          <li>Requires an active Chainlink Functions subscription with LINK</li>
+        </ul>
+      </div>
+      
+      <div class="button-container">
+        <button id="sendRequestBtn" class="primary-btn">Send Chainlink Request</button>
+      </div>
+      
+      <div id="requestIdContainer" class="hidden">
+        <div class="request-id-box">
+          <h4>Request ID:</h4>
+          <code id="requestIdValue"></code>
+        </div>
+      </div>
+    </div>
+    
+    <div id="ownerPanelStatus" class="status-message hidden"></div>
+  </div>
+</div>
+
+<script>
+  import { checkIfOwner, callSendRequestAsOwner } from '../lib/contractInteraction.js';
+  
+  // Extend Window interface
+  declare global {
+    interface Window {
+      openOwnerPanel: () => void;
+    }
+  }
+  
+  // Get DOM elements
+  const modal = document.getElementById('ownerPanelModal') as HTMLDivElement;
+  const closeBtn = modal?.querySelector('.close');
+  const sendRequestBtn = document.getElementById('sendRequestBtn') as HTMLButtonElement;
+  const requestIdContainer = document.getElementById('requestIdContainer');
+  const requestIdValue = document.getElementById('requestIdValue');
+  const statusDiv = document.getElementById('ownerPanelStatus');
+  
+  // Check if the connected wallet is the owner
+  async function validateOwnership() {
+    if (!sendRequestBtn) return;
+    
+    try {
+      const isOwner = await checkIfOwner();
+      if (isOwner) {
+        sendRequestBtn.disabled = false;
+        showStatus('Connected as contract owner', 'success');
+      } else {
+        sendRequestBtn.disabled = true;
+        showStatus('You are not the contract owner', 'error');
+      }
+    } catch (error) {
+      showStatus('Error checking ownership: ' + (error instanceof Error ? error.message : 'Unknown error'), 'error');
+      sendRequestBtn.disabled = true;
+    }
+  }
+  
+  // Function to open the modal
+  window.openOwnerPanel = async () => {
+    if (modal) {
+      modal.style.display = 'block';
+      await validateOwnership();
+    }
+  };
+  
+  // Close modal when clicking the X button
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (modal) modal.style.display = 'none';
+    });
+  }
+  
+  // Close modal when clicking outside the modal
+  window.addEventListener('click', (event) => {
+    if (event.target === modal && modal) {
+      modal.style.display = 'none';
+    }
+  });
+  
+  // Send request button event handler
+  if (sendRequestBtn) {
+    sendRequestBtn.addEventListener('click', async () => {
+      try {
+        sendRequestBtn.disabled = true;
+        sendRequestBtn.textContent = 'Processing...';
+        showStatus('Sending request...', 'info');
+        
+        // Call the sendRequest function
+        const result = await callSendRequestAsOwner();
+        
+        if (result.success) {
+          showStatus(result.message, 'success');
+          
+          // Display the request ID
+          if (requestIdContainer && requestIdValue && result.requestId) {
+            requestIdValue.textContent = result.requestId;
+            requestIdContainer.classList.remove('hidden');
+          }
+        } else {
+          showStatus(result.message, 'error');
+        }
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+        showStatus(errorMessage, 'error');
+      } finally {
+        sendRequestBtn.disabled = false;
+        sendRequestBtn.textContent = 'Send Chainlink Request';
+      }
+    });
+  }
+  
+  // Helper function to show status messages
+  function showStatus(message: string, type: 'success' | 'error' | 'info') {
+    if (!statusDiv) return;
+    
+    statusDiv.textContent = message;
+    statusDiv.className = 'status-message';
+    statusDiv.classList.add(type);
+    statusDiv.classList.remove('hidden');
+    
+    // Auto-hide success/info messages after some time
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => {
+        statusDiv.classList.add('fade-out');
+        setTimeout(() => {
+          statusDiv.classList.add('hidden');
+          statusDiv.classList.remove('fade-out');
+        }, 1000);
+      }, 5000);
+    }
+  }
+</script>
+
+<style>
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+  
+  .modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 2rem;
+    border-radius: 10px;
+    max-width: 600px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+    position: relative;
+  }
+  
+  .close {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    color: #888;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .close:hover {
+    color: #333;
+  }
+  
+  .owner-only {
+    font-weight: bold;
+    color: #f57c00;
+    margin-bottom: 1.5rem;
+  }
+  
+  .admin-section {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .admin-section h3 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  
+  .info-box {
+    background-color: #f8f9fa;
+    border-left: 4px solid #4c8bf5;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+  }
+  
+  .info-box.info {
+    border-left-color: #4c8bf5;
+  }
+  
+  .info-box ul {
+    margin: 0.5rem 0 0 1.5rem;
+    padding: 0;
+  }
+  
+  .info-box li {
+    margin-bottom: 0.3rem;
+  }
+  
+  .button-container {
+    margin: 1.5rem 0;
+    display: flex;
+    justify-content: flex-start;
+  }
+  
+  .primary-btn {
+    background-color: #4c8bf5;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  
+  .primary-btn:hover {
+    background-color: #3a70d6;
+  }
+  
+  .primary-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+  
+  .request-id-box {
+    background-color: #f1f8e9;
+    border: 1px solid #c5e1a5;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .request-id-box h4 {
+    margin: 0 0 0.5rem 0;
+    color: #33691e;
+  }
+  
+  .request-id-box code {
+    display: block;
+    background-color: #fafafa;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-family: monospace;
+    word-break: break-all;
+    color: #333;
+  }
+  
+  .status-message {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+  }
+  
+  .status-message.success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+  }
+  
+  .status-message.error {
+    background-color: #ffebee;
+    color: #c62828;
+  }
+  
+  .status-message.info {
+    background-color: #e3f2fd;
+    color: #1565c0;
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
+  .fade-out {
+    opacity: 0;
+    transition: opacity 1s ease-out;
+  }
+</style> 

@@ -1,0 +1,249 @@
+<div id="sendRequestModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>Submit News Request</h2>
+    <p>Trigger a new blockchain request to fetch the latest news articles.</p>
+    
+    <div class="info-box">
+      <p><strong>How it works:</strong></p>
+      <ol>
+        <li>Click "Send Request" to initiate a Chainlink Functions request.</li>
+        <li>Approve the transaction in your MetaMask wallet.</li>
+        <li>The Chainlink node will execute code to fetch and store news on-chain.</li>
+        <li>Articles will appear on the homepage once processed.</li>
+      </ol>
+    </div>
+    
+    <div class="button-container">
+      <button id="submitRequest" class="submit-btn">Send Request to Blockchain</button>
+    </div>
+    
+    <div id="transactionStatus" class="status-message hidden"></div>
+  </div>
+</div>
+
+<script>
+  import { sendUrlToContract } from '../lib/contractInteraction.js';
+  
+  // Extend Window interface to add our function
+  declare global {
+    interface Window {
+      openSendRequestModal: () => void;
+    }
+  }
+  
+  // Get DOM elements
+  const modal = document.getElementById('sendRequestModal') as HTMLDivElement;
+  const closeBtn = document.querySelector('.close');
+  const submitBtn = document.getElementById('submitRequest') as HTMLButtonElement;
+  const statusDiv = document.getElementById('transactionStatus');
+  
+  // Default news sources URL that will be used by Chainlink Functions
+  const DEFAULT_NEWS_SOURCES = [
+    "https://blog.chain.Link/",
+    "https://ethereum.org/en/blog/", 
+    "https://cointelegraph.com/"
+  ];
+  
+  // Function to open modal
+  window.openSendRequestModal = () => {
+    if (modal) {
+      modal.style.display = 'block';
+    }
+  };
+  
+  // Close modal when clicking the X
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    });
+  }
+  
+  // Close modal when clicking outside the modal
+  window.addEventListener('click', (event) => {
+    if (event.target === modal && modal) {
+      modal.style.display = 'none';
+    }
+  });
+  
+  // Handle form submission
+  if (submitBtn && statusDiv) {
+    submitBtn.addEventListener('click', async () => {
+      try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Processing...';
+        showStatus('Connecting to wallet...', 'info');
+        
+        // Get a random news source from the default list
+        const randomIndex = Math.floor(Math.random() * DEFAULT_NEWS_SOURCES.length);
+        const defaultUrl = DEFAULT_NEWS_SOURCES[randomIndex];
+        
+        // Store the selected news source in session storage
+        sessionStorage.setItem('defaultNewsSource', defaultUrl);
+        
+        // Call the contract with the default URL
+        const result = await sendUrlToContract(defaultUrl);
+        
+        if (result.success) {
+          showStatus(`Success! Transaction: ${result.txHash.slice(0, 10)}...${result.txHash.slice(-8)}`, 'success');
+        } else {
+          showStatus(result.message, 'error');
+        }
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+        showStatus(errorMessage, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Request to Blockchain';
+      }
+    });
+  }
+  
+  // Helper function to show status messages
+  function showStatus(message: string, type: 'success' | 'error' | 'info') {
+    if (!statusDiv) return;
+    
+    statusDiv.textContent = message;
+    statusDiv.className = 'status-message';
+    
+    // Add appropriate styling class
+    statusDiv.classList.add(type);
+    statusDiv.classList.remove('hidden');
+    
+    // Auto-hide success/info messages after some time
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => {
+        statusDiv.classList.add('fade-out');
+        setTimeout(() => {
+          statusDiv.classList.add('hidden');
+          statusDiv.classList.remove('fade-out');
+        }, 1000);
+      }, 5000);
+    }
+  }
+</script>
+
+<style>
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+  
+  .modal-content {
+    background-color: white;
+    margin: 10% auto;
+    padding: 2rem;
+    border-radius: 10px;
+    max-width: 600px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+    position: relative;
+  }
+  
+  .close {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    color: #888;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .close:hover {
+    color: #333;
+  }
+  
+  .info-box {
+    background-color: #f8f9fa;
+    border-left: 4px solid #4c8bf5;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+  }
+  
+  .info-box ol {
+    margin: 0.5rem 0 0 1.5rem;
+    padding: 0;
+  }
+  
+  .info-box li {
+    margin-bottom: 0.5rem;
+  }
+  
+  .button-container {
+    display: flex;
+    justify-content: center;
+    margin: 2rem 0;
+  }
+  
+  .submit-btn {
+    background-color: #4c8bf5;
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 4px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  .submit-btn:hover {
+    background-color: #3a70d6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .submit-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .submit-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+  
+  .status-message {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+  
+  .status-message.success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+  }
+  
+  .status-message.error {
+    background-color: #ffebee;
+    color: #c62828;
+  }
+  
+  .status-message.info {
+    background-color: #e3f2fd;
+    color: #1565c0;
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
+  .fade-out {
+    opacity: 0;
+    transition: opacity 1s ease-out;
+  }
+</style> 

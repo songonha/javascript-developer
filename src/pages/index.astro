@@ -1,0 +1,184 @@
+---
+import fetch from "node-fetch";
+import { JSDOM } from "jsdom";
+// Import the getAllArticles function from the newsArchive.js file
+import getAllArticles from "../lib/newsArchive.js";
+import BaseHead from '../components/BaseHead.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+
+// Define interfaces for article data
+interface Article {
+  ogTitle: string;
+  ogImage: string;
+  url: string;
+}
+
+// Initialize articles variable and error flag
+let articles: string[] = [];
+let errorOccurred = false;
+
+try {
+  // Try to fetch all articles
+  articles = await getAllArticles();
+  // Check if articles is undefined or empty
+  if (!articles || articles.length === 0) {
+    console.warn("No articles found from blockchain, using fallback data");
+    // Provide some fallback data for development/testing
+    articles = [
+      "https://blog.chain.link/",
+      "https://ethereum.org/en/developers/",
+      "https://docs.soliditylang.org/"
+    ];
+  }
+} catch (error) {
+  // If an error occurs, log it and set the error flag
+  console.error("Failed to get articles:", error);
+  errorOccurred = true;
+  // Provide fallback URLs when errors occur
+  articles = [
+    "https://blog.chain.link/",
+    "https://ethereum.org/en/developers/",
+    "https://docs.soliditylang.org/"
+  ];
+}
+
+async function fetchOGData(url: string): Promise<Article> {
+  try {
+    const response = await fetch(url);
+    const html = await response.text();
+    const dom = new JSDOM(html);
+    const doc = dom.window.document;
+    let ogTitle =
+      doc.querySelector('meta[property="og:title"]')?.content || 
+      doc.querySelector('title')?.textContent || 
+      url;
+    const ogImage = 
+      doc.querySelector('meta[property="og:image"]')?.content || 
+      '/blog-placeholder-1.jpg'; // Use an existing placeholder image
+    return { ogTitle, ogImage, url };
+  } catch (error) {
+    console.error("Error fetching OG data for " + url + ":", error);
+    return { 
+      ogTitle: url, 
+      ogImage: '/blog-placeholder-1.jpg', 
+      url 
+    };
+  }
+}
+
+async function articlesWithOGData(urls: string[]): Promise<Article[]> {
+  try {
+    return await Promise.all(urls.map(fetchOGData));
+  } catch (error) {
+    console.error("Error processing articles data:", error);
+    return urls.map(url => ({ 
+      ogTitle: url, 
+      ogImage: '/blog-placeholder-1.jpg', 
+      url 
+    }));
+  }
+}
+
+let allArticles: Article[] = [];
+try {
+  allArticles = await articlesWithOGData(articles);
+} catch (error) {
+  console.error("Error getting OG data for articles:", error);
+  errorOccurred = true;
+}
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+		<style>
+			.article-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+				gap: 2rem;
+				padding: 2rem 0;
+			}
+			.article-card {
+				border: 1px solid #e0e0e0;
+				border-radius: 8px;
+				overflow: hidden;
+				transition: transform 0.3s ease, box-shadow 0.3s ease;
+				background-color: white;
+			}
+			.article-card:hover {
+				transform: translateY(-5px);
+				box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+			}
+			.article-image {
+				width: 100%;
+				height: 200px;
+				object-fit: cover;
+			}
+			.article-content {
+				padding: 1.5rem;
+			}
+			.article-title {
+				margin: 0 0 1rem 0;
+				font-size: 1.25rem;
+			}
+			.article-link {
+				text-decoration: none;
+				color: inherit;
+			}
+			.error-message {
+				text-align: center;
+				padding: 2rem;
+				background-color: #fff4f4;
+				border-radius: 8px;
+				border: 1px solid #ffcaca;
+				color: #d32f2f;
+			}
+			main {
+				width: 100%;
+				max-width: 1200px;
+				margin: 0 auto;
+				padding: 0 1rem;
+			}
+			.hero {
+				padding: 4rem 0;
+				text-align: center;
+			}
+			.hero h1 {
+				margin-bottom: 1rem;
+			}
+		</style>
+	</head>
+	<body>
+		<Header title={SITE_TITLE} />
+		<main>
+			<section class="hero">
+				<h1>Blockchain News Archive</h1>
+				<p>Latest articles from the blockchain space, stored permanently on-chain</p>
+			</section>
+
+			{errorOccurred && (
+				<div class="error-message">
+					<p>There was an error fetching news articles. Please try again later.</p>
+				</div>
+			)}
+
+			<div class="article-grid">
+				{allArticles.map((article) => (
+					<article class="article-card">
+						<a href={article.url} class="article-link" target="_blank" rel="noopener noreferrer">
+							<img src={article.ogImage} alt="" class="article-image" />
+							<div class="article-content">
+								<h2 class="article-title">{article.ogTitle}</h2>
+								<span class="article-source">{new URL(article.url).hostname}</span>
+							</div>
+						</a>
+					</article>
+				))}
+			</div>
+		</main>
+		<Footer />
+	</body>
+</html>
